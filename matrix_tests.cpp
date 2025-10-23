@@ -6,7 +6,7 @@
 #include "stout_smearing.hpp"
 
 #include <string>
-
+ 
 
 
 

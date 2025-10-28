@@ -210,3 +210,41 @@ int main() {
   //    std::cout << "\n";
   //}
 }
+
+
+
+
+
+
+
+
+
+
+  // --- Reconstruct B from eigen-decomposition ---
+  t_complex Lambda[NCOLOR2] = {0};
+  for (int i = 0; i < NCOLOR; ++i)
+      Lambda[i*NCOLOR + i] = evals[i]; // evals = real eigenvalues of iB
+
+  // temp = V * diag(Lambda)
+  //t_complex temp[NCOLOR2];
+  //c3x3_times_c3x3(temp, eigenvectors, Lambda);
+
+  // iB_reconstructed = V * diag(Lambda) * V†
+  t_complex iB_reconstructed[NCOLOR2];
+  
+  VtimesDiagLtimesVdagger(iB_reconstructed, eigenvectors, Lambda);
+  
+  //c3x3_conj_times_c3x3(iB_reconstructed, eigenvectors, temp);
+
+  // B_reconstructed = -i * iB_reconstructed
+  t_complex B_reconstructed[NCOLOR2];
+  for (int i = 0; i < NCOLOR2; ++i)
+      B_reconstructed[i] = t_complex(0.0, -1.0) * iB_reconstructed[i];
+
+  // Compute reconstruction error
+  double recon_error = norm_diff(B, B_reconstructed, NCOLOR2);
+  std::cout << "Reconstruction error ||B - (-i V diag(evals) V†)|| = "
+            << recon_error << std::endl;
+
+  return 0;
+}

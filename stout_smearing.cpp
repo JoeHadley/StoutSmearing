@@ -2,8 +2,7 @@
 
 // Computes the staples for the link at position x in direction mu
 void get_staples(t_complex* C,
-                Lattice &lat,
-                GaugeLikeField &gf,
+                GaugeField &gf,
                 int x, int mu,
                 double* rho){
 
@@ -30,16 +29,16 @@ void get_staples(t_complex* C,
 
         // Forward staple 
         t_complex* F1 = gf.Link(x, nu);
-        t_complex* F2 = gf.Link(lat.shift_fwd(x, nu), mu);
-        t_complex* F3 = gf.Link(lat.shift_fwd(x, mu), nu); // To conjugate
+        t_complex* F2 = gf.Link(gf.shift_fwd(x, nu), mu);
+        t_complex* F3 = gf.Link(gf.shift_fwd(x, mu), nu); // To conjugate
 
         c3x3_times_c3x3(tmp_f, F1, F2);
         c3x3_times_c3x3_conj(fwd_staple, tmp_f, F3);
 
         // Backward staple
-        t_complex* B1 = gf.Link(lat.shift_bwd(x,nu), nu); // To conjugate
-        t_complex* B2 = gf.Link(lat.shift_bwd(x,nu), mu);
-        t_complex* B3 = gf.Link(lat.shift_fwd(lat.shift_bwd(x, nu), mu), nu);
+        t_complex* B1 = gf.Link(gf.shift_bwd(x,nu), nu); // To conjugate
+        t_complex* B2 = gf.Link(gf.shift_bwd(x,nu), mu);
+        t_complex* B3 = gf.Link(gf.shift_fwd(gf.shift_bwd(x, nu), mu), nu);
 
         c3x3_conj_times_c3x3(tmp_b, B1, B2);
         c3x3_times_c3x3(bwd_staple, tmp_b, B3);
@@ -88,8 +87,7 @@ void project_to_su3(t_complex* res, t_complex* M ){
 // signature: projection_field should be a caller-allocated t_complex array of length 4*gf.vol*NCOLOR2
 // rho is pointer to two values {rho_time, rho_space} (your isotropic convention)
 void compute_antihermitian_matrix(t_complex* projection_field,
-                                Lattice &lat,
-                                GaugeLikeField &gf,
+                                GaugeField &gf,
                                 double* rho)
 {
     // temporaries (reuse inside loops to avoid allocations)
@@ -104,7 +102,7 @@ void compute_antihermitian_matrix(t_complex* projection_field,
     for (int x = 0; x < gf.vol; ++x) {
         for (uint mu = 0; mu < 4; ++mu) {
             // 1) compute staple C_mu(x) into C
-            get_staples(C, lat, gf, x, mu, rho);
+            get_staples(C, gf, x, mu, rho);
 
             // 2) compute Omega = C * U_mu(x)^\dagger
             //    We assume you have c3x3_times_c3x3_conj(dest, A, B) which performs dest = A * B^\dagger
@@ -123,27 +121,62 @@ void compute_antihermitian_matrix(t_complex* projection_field,
     }
 }
 
+
+
+void VtimesDiagLtimesVdagger(t_complex* res, const t_complex* V, const t_complex* L) 
+{
+    // Assumes L is diagonal matrix stored as a 2D array with only diagonal elements non-zero
+    t_complex temp[NCOLOR2] = {0};
+
+    t_complex l1, l2, l3;
+    l1 = L[0];
+    l2 = L[4];
+    l3 = L[8];
+
+    t_complex v11, v12, v13;
+    t_complex v21, v22, v23;
+    t_complex v31, v32, v33;
+    v11 = V[0]; v12 = V[1]; v13 = V[2];
+    v21 = V[3]; v22 = V[4]; v23 = V[5];
+    v31 = V[6]; v32 = V[7]; v33 = V[8];
+
+    res[0] = l1*v11*conj(v11) + l2*v12*conj(v12) + l3*v13*conj(v13);
+    res[1] = l1*v11*conj(v21) + l2*v12*conj(v22) + l3*v13*conj(v23);
+    res[2] = l1*v11*conj(v31) + l2*v12*conj(v32) + l3*v13*conj(v33);
+
+    res[3] = l1*v21*conj(v11) + l2*v22*conj(v12) + l3*v23*conj(v13);
+    res[4] = l1*v21*conj(v21) + l2*v22*conj(v22) + l3*v23*conj(v23);
+    res[5] = l1*v21*conj(v31) + l2*v22*conj(v32) + l3*v23*conj(v33);
+
+    res[6] = l1*v31*conj(v11) + l2*v32*conj(v12) + l3*v33*conj(v13);
+    res[7] = l1*v31*conj(v21) + l2*v32*conj(v22) + l3*v33*conj(v23);
+    res[8] = l1*v31*conj(v31) + l2*v32*conj(v32) + l3*v33*conj(v33);
+    
+}
+
+
+
+
 void exp_iQ(t_complex* res,  t_complex* Q, t_complex* evals_out,t_complex* eigenvectors_out ) {
-    const int N = 3;
     int info;
 
     // Step 1: Build iQ (since Q is anti-Hermitian, iQ is Hermitian)
     t_complex iQ[NCOLOR2];
-    for (int i = 0; i < N*N; ++i)
+    for (int i = 0; i < NCOLOR2; ++i)
         iQ[i] = t_complex(0.0, 1.0) * Q[i];
 
     // Step 2: Compute eigen-decomposition: iQ = V * diag(λ) * V†
-    double eigvals[N];             // real eigenvalues
+    double eigvals[NCOLOR];             // real eigenvalues
     t_complex V[NCOLOR2];          // will hold eigenvectors
 
     // Copy iQ because LAPACKE overwrites input
-    for (int i = 0; i < N*N; ++i)
+    for (int i = 0; i < NCOLOR2; ++i)
         V[i] = iQ[i];
 
     info = LAPACKE_zheev(LAPACK_ROW_MAJOR, 'V', 'U',
-                         N,
+                         NCOLOR,
                          reinterpret_cast<lapack_complex_double*>(V),
-                         N,
+                         NCOLOR,
                          eigvals);
 
     if (info != 0) {
@@ -153,54 +186,53 @@ void exp_iQ(t_complex* res,  t_complex* Q, t_complex* evals_out,t_complex* eigen
 
     // Step 3: Compute exp(iQ) = V * exp(i*λ) * V†
     t_complex expD[NCOLOR2] = {0};
-    for (int i = 0; i < N; ++i)
-        expD[i*N + i] = std::exp(t_complex(0.0, eigvals[i]));
-
+    for (int i = 0; i < NCOLOR; ++i)
+        //expD[i*NCOLOR + i] = std::exp(eigvals[i]);
+        expD[i*NCOLOR + i] = std::exp(t_complex(0.0, -eigvals[i]));
     t_complex temp[NCOLOR2] = {0};
-    for (int i = 0; i < N; ++i)
-        for (int j = 0; j < N; ++j)
-            for (int k = 0; k < N; ++k)
-                temp[i*N + j] += V[i*N + k] * expD[k*N + k] * std::conj(V[j*N + k]);
+    for (int i = 0; i < NCOLOR; ++i)
+        for (int j = 0; j < NCOLOR; ++j)
+            for (int k = 0; k < NCOLOR; ++k)
+                temp[i*NCOLOR + j] += V[i*NCOLOR + k] * expD[k*NCOLOR + k] * std::conj(V[j*NCOLOR + k]);
 
-    for (int i = 0; i < N*N; ++i)
+    for (int i = 0; i < NCOLOR2; ++i)
         res[i] = temp[i];
 
     // Optional: output eigenvalues
     if (evals_out) {
-        for (int i = 0; i < N; ++i)
+        for (int i = 0; i < NCOLOR; ++i)
             evals_out[i] = t_complex(eigvals[i], 0.0);
     }
     // Optional: output eigenvectors
     if (eigenvectors_out) {
-        for (int i = 0; i < N*N; ++i)
+        for (int i = 0; i < NCOLOR2; ++i)
             eigenvectors_out[i] = V[i];
     }
 }
 
 
 
-void smear_field( GaugeLikeField &output,
-                  GaugeLikeField &gf,
-                  Lattice &lat,
+void smear_field( GaugeField &output_gf,
+                  GaugeField &input_gf,
                   int n_steps,
                   double* rho) {
 
     // Allocate projection field
-    std::vector<t_complex> projection_field(4 * gf.vol * NCOLOR2, t_complex(0.0, 0.0));
+    std::vector<t_complex> projection_field(4 * input_gf.vol * NCOLOR2, t_complex(0.0, 0.0));
 
     // Temporary arrays for link updates
     t_complex exp_iQ_matrix[NCOLOR2];
     t_complex updated_link[NCOLOR2];
 
     // Start with input field
-    GaugeLikeField current = gf;
+    GaugeField current_gf = input_gf;
 
     for (int step = 0; step < n_steps; ++step) {
         // 1) Compute anti-Hermitian traceless matrices
-        compute_antihermitian_matrix(projection_field.data(), lat, current, rho);
+        compute_antihermitian_matrix(projection_field.data(), current_gf, rho);
 
         // 2) Update gauge links: U_mu(x) -> exp(i * Q_mu(x)) * U_mu(x)
-        for (int x = 0; x < current.vol; ++x) {
+        for (int x = 0; x < current_gf.vol; ++x) {
             for (uint mu = 0; mu < 4; ++mu) {
                 // Get Q_mu(x)
                 t_complex* Q = projection_field.data() + (x * 4 + mu) * NCOLOR2;
@@ -209,7 +241,7 @@ void smear_field( GaugeLikeField &output,
                 exp_iQ(exp_iQ_matrix, Q);
 
                 // Update link: U_mu(x) = exp(iQ) * U_mu(x)
-                t_complex* U_link = current.Link(x, mu);
+                t_complex* U_link = current_gf.Link(x, mu);
                 c3x3_times_c3x3(updated_link, exp_iQ_matrix, U_link);
 
                 // Store updated link back
@@ -219,10 +251,10 @@ void smear_field( GaugeLikeField &output,
         }
     }
         // Copy result to output
-    for (int x = 0; x < output.vol; ++x)
+    for (int x = 0; x < output_gf.vol; ++x)
         for (uint mu = 0; mu < 4; ++mu) {
-            t_complex* U_src = current.Link(x, mu);
-            t_complex* U_dst = output.Link(x, mu);
+            t_complex* U_src = current_gf.Link(x, mu);
+            t_complex* U_dst = output_gf.Link(x, mu);
             for (int i = 0; i < NCOLOR2; ++i)
                 U_dst[i] = U_src[i];
         }

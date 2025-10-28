@@ -45,74 +45,65 @@ void printMatrix(const t_complex* A, const string& name = "")
     }
 }
 
-int main() {
 
-  t_complex A[NCOLOR2];
-  t_complex B[NCOLOR2];
+void traceTest(const t_complex* A) {
+    t_complex trace = tr_c3x3(A);
+    std::cout << "Trace: " << trace << std::endl;
+}   
 
-  // Fill A with random complex numbers
-  randomlyFillMatrix(A);
-  printMatrix(A, "A");
+void antiHermitianTest(const t_complex* A, string name = "B") {
+    t_complex Adagger[NCOLOR2];
+    c3x3_conj(Adagger, A);
 
-  // Project A onto anti-Hermitian, traceless matrix B
-  project_to_su3(B, A);
-  printMatrix(B, "B = proj_SU3(A)");
+    double sum = 0.0;
+    for (int i = 0; i < NCOLOR2; i++)
+        sum += std::norm(A[i] + Adagger[i]);  // <-- std::norm(), not variable name
+    double antiHermNorm = std::sqrt(sum);
 
-  std::cout << "Trace(B) = " << tr_c3x3(B) << std::endl;
+    string message;
+    message = "||" + name + " + " + name + "†|| = ";
+    std::cout << message << antiHermNorm << std::endl;
+}
 
-  // Check anti-Hermiticity: B + B† ≈ 0
-  t_complex Bdagger[NCOLOR2];
-  c3x3_conj(Bdagger, B);
 
-  double antiHermNorm = 0.0;
-  for (int i = 0; i < NCOLOR2; i++)
-      antiHermNorm += norm(B[i] + Bdagger[i]);
-  antiHermNorm = sqrt(antiHermNorm);
-  std::cout << "||B + B†|| = " << antiHermNorm << std::endl;
+void unitarity_test(const t_complex* U, std::string name = "U") {
+    double sum = 0.0;
 
-  // --- Compute exp(iB) and eigen-decomposition ---
-  t_complex expA[NCOLOR2];
-  t_complex evals[NCOLOR];           // real eigenvalues of iB
-  t_complex eigenvectors[NCOLOR2];   // eigenvectors of iB
+    for (int i = 0; i < NCOLOR; ++i) {
+        for (int j = 0; j < NCOLOR; ++j) {
+            t_complex inner = 0.0;
+            for (int k = 0; k < NCOLOR; ++k)
+                inner += std::conj(U[k*NCOLOR + i]) * U[k*NCOLOR + j];
+            if (i == j)
+                inner -= t_complex(1.0, 0.0);  // subtract identity
+            sum += std::norm(inner);
+        }
+    }
 
-  exp_iQ(expA, B, evals, eigenvectors);
-  printMatrix(expA, "exp(iB)");
+    double norm = std::sqrt(sum);
+    std::cout << "||" << name << "†" << name << " - I|| = " << norm << std::endl;
+}
 
-  // --- Sanity check: unitarity of exp(iB) ---
-  double unitarity = 0.0;
-  for (int i = 0; i < NCOLOR; ++i) {
-      for (int j = 0; j < NCOLOR; ++j) {
-          t_complex sum = 0.0;
-          for (int k = 0; k < NCOLOR; ++k)
-              sum += std::conj(expA[k*NCOLOR + i]) * expA[k*NCOLOR + j];
-          if (i == j) sum -= t_complex(1.0, 0.0);
-          unitarity += std::norm(sum);
-      }
-  }
-  std::cout << "||U†U - I|| = " << sqrt(unitarity) << std::endl;
 
-  // --- Check determinant ---
-  t_complex det =
-      expA[0]*(expA[4]*expA[8] - expA[5]*expA[7])
-    - expA[1]*(expA[3]*expA[8] - expA[5]*expA[6])
-    + expA[2]*(expA[3]*expA[7] - expA[4]*expA[6]);
-  std::cout << "det(U) = " << det
-            << "  |det| = " << std::abs(det) << std::endl;
+void determinant_test(const t_complex* U, std::string name = "U") {
+    t_complex det = U[0]*(U[4]*U[8] - U[5]*U[7])
+                  - U[1]*(U[3]*U[8] - U[5]*U[6])
+                  + U[2]*(U[3]*U[7] - U[4]*U[6]);
+    std::cout << "det(" << name << ") = " << det
+              << "   |det| = " << std::abs(det) << std::endl;
+}
 
-  // --- Reconstruct B from eigen-decomposition ---
+void reconstruction_test(t_complex* B, t_complex* eigenvectors, t_complex* evals, std::string name = "B") {
+  // Make diagonal matrix of eigenvalues
   t_complex Lambda[NCOLOR2] = {0};
   for (int i = 0; i < NCOLOR; ++i)
       Lambda[i*NCOLOR + i] = evals[i]; // evals = real eigenvalues of iB
 
-  // temp = V * diag(Lambda)
-  t_complex temp[NCOLOR2];
-  c3x3_times_c3x3(temp, eigenvectors, Lambda);
 
-  // iB_reconstructed = V * diag(Lambda) * V†
   t_complex iB_reconstructed[NCOLOR2];
-  c3x3_conj_times_c3x3(iB_reconstructed, eigenvectors, temp);
+  // Reconstruct iB: V * diag(evals) * V†  
+  VtimesDiagLtimesVdagger(iB_reconstructed, eigenvectors, Lambda);
 
-  // B_reconstructed = -i * iB_reconstructed
   t_complex B_reconstructed[NCOLOR2];
   for (int i = 0; i < NCOLOR2; ++i)
       B_reconstructed[i] = t_complex(0.0, -1.0) * iB_reconstructed[i];
@@ -121,6 +112,72 @@ int main() {
   double recon_error = norm_diff(B, B_reconstructed, NCOLOR2);
   std::cout << "Reconstruction error ||B - (-i V diag(evals) V†)|| = "
             << recon_error << std::endl;
+}
+
+
+void run_tests(){
+  t_complex A[NCOLOR2];
+  t_complex B[NCOLOR2];
+
+  // Fill A with random complex numbers
+  randomlyFillMatrix(A);
+  //printMatrix(A, "A");
+
+  // Project A onto anti-Hermitian, traceless matrix B
+  project_to_su3(B, A);
+  //printMatrix(B, "B = proj_SU3(A)");
+
+  // Verify B is traceless
+  traceTest(B);
+
+  // Verify B is anti-Hermitian
+  antiHermitianTest(B,"B");
+
+
+
+  // Compute C = exp(iB) and eigen-decomposition
+  t_complex C[NCOLOR2];
+  t_complex evals[NCOLOR];           // real eigenvalues of iB
+  t_complex eigenvectors[NCOLOR2];   // eigenvectors of iB
+
+  exp_iQ(C, B, evals, eigenvectors);
+  printMatrix(C, "exp(iB)");
+
+  // Verify C is unitary
+  unitarity_test(C);
+
+
+  // Verify det(C) = 1
+  determinant_test(C);
+
+
+  // Verify reconstruction of B from eigen-decomposition
+  reconstruction_test(B, eigenvectors, evals, "B");
+
+}
+
+int main() {
+
+  // load a gauge field
+  GaugeField gf("unit_LT8_LS4.bin");
+  //GaugeField gf(gf.vol);
+  gf.RandomizeLinks();
+  std::cout << "Mean plaquette before smearing: " << gf.MeanPlaquette() << std::endl;
+  // set smearing parameters
+  int n_steps = 5;
+  double rho[4] = {0.1, 0.1, 0.1, 0.1}; // isotropic smearing
+  
+  GaugeField smeared_gf("unit_LT8_LS4.bin");
+
+  //GaugeField smeared_gf(gf.vol);   // create a gauge field with the same lattice size
+  for(int x=0; x<gf.vol; x++)
+    for(uint mu=0; mu<4; mu++)
+      std::copy(gf.Link(x, mu), gf.Link(x, mu)+NCOLOR2, smeared_gf.Link(x, mu));
+
+
+  smear_field(smeared_gf, gf, n_steps, rho);
+  std::cout << "Mean plaquette after smearing: " << smeared_gf.MeanPlaquette() << std::endl;
+
 
   return 0;
 }

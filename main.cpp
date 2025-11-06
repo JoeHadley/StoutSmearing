@@ -84,7 +84,7 @@ void unitarity_test(const t_complex* U, std::string name = "U") {
     std::cout << "||" << name << "†" << name << " - I|| = " << norm << std::endl;
 }
 
-
+ 
 void determinant_test(const t_complex* U, std::string name = "U") {
     t_complex det = U[0]*(U[4]*U[8] - U[5]*U[7])
                   - U[1]*(U[3]*U[8] - U[5]*U[6])

@@ -159,15 +159,18 @@ void run_tests(){
 int main() {
 
   // load a gauge field
-  GaugeField gf("unit_LT8_LS4.bin");
-  //GaugeField gf(gf.vol);
-  gf.RandomizeLinks();
+  GaugeField gf("Gen2_16x24n9820");
+
   std::cout << "Mean plaquette before smearing: " << gf.MeanPlaquette() << std::endl;
   // set smearing parameters
-  int n_steps = 5;
-  double rho[4] = {0.1, 0.1, 0.1, 0.1}; // isotropic smearing
+  int n_steps = 1;
+  double rho[4] = {0.0, 0.14, 0.14, 0.14}; // isotropic smearing
   
-  GaugeField smeared_gf("unit_LT8_LS4.bin");
+
+
+  Lattice lat_copy(gf.LT, gf.LS);
+  GaugeField smeared_gf(lat_copy);
+  //GaugeField smeared_gf("unit_LT8_LS4.bin");
 
   //GaugeField smeared_gf(gf.vol);   // create a gauge field with the same lattice size
   for(int x=0; x<gf.vol; x++)

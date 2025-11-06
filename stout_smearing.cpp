@@ -225,7 +225,17 @@ void smear_field( GaugeField &output_gf,
     t_complex updated_link[NCOLOR2];
 
     // Start with input field
-    GaugeField current_gf = input_gf;
+    // GaugeField current_gf = input_gf;
+
+    Lattice lat_copy(input_gf.LT, input_gf.LS);
+    GaugeField current_gf(lat_copy);
+
+    for (int x = 0; x < input_gf.vol; ++x)
+        for (uint mu = 0; mu < 4; ++mu)
+            std::copy(input_gf.Link(x, mu),
+                  input_gf.Link(x, mu) + NCOLOR2,
+                  current_gf.Link(x, mu));
+
 
     for (int step = 0; step < n_steps; ++step) {
         // 1) Compute anti-Hermitian traceless matrices

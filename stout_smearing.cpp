@@ -3,7 +3,7 @@
 // Computes the staples for the link at position x in direction mu
 void get_staples(t_complex* C,
                 GaugeField &gf,
-                int x, int mu,
+                int x, uint mu,
                 double* rho){
 
     for (int i = 0; i < NCOLOR2; i++)
@@ -126,7 +126,7 @@ void compute_antihermitian_matrix(t_complex* projection_field,
 void VtimesDiagLtimesVdagger(t_complex* res, const t_complex* V, const t_complex* L) 
 {
     // Assumes L is diagonal matrix stored as a 2D array with only diagonal elements non-zero
-    t_complex temp[NCOLOR2] = {0};
+    // t_complex temp[NCOLOR2] = {0};
 
     t_complex l1, l2, l3;
     l1 = L[0];
